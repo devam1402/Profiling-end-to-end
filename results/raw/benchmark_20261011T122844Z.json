@@ -1,0 +1,66 @@
+{
+  "timestamp_utc": "2026-10-11T12:28:44.448402+00:00",
+  "status": "completed",
+  "device": "cpu",
+  "device_name": "CPU",
+  "pytorch_version": "2.14.1+cu130",
+  "attention_backend": "sdpa",
+  "parameters": 67839744,
+  "warmup_steps": 2,
+  "measured_steps": 5,
+  "batch_size": 2,
+  "sequence_length": 128,
+  "tokens_per_step": 254,
+  "total_measured_tokens": 1270,
+  "total_measured_seconds": 6.602475631982088,
+  "average_step_seconds": 1.3204951263964175,
+  "median_step_seconds": 1.318368678999832,
+  "tokens_per_second": 192.3520919711053,
+  "step_times_seconds": [
+    1.4349286599899642,
+    1.3107811929949094,
+    1.318368678999832,
+    1.3372147769841831,
+    1.2011823230131995
+  ],
+  "losses": [
+    10.561269760131836,
+    10.520051956176758,
+    10.509313583374023,
+    10.54764175415039,
+    10.557686805725098
+  ],
+  "final_loss": 10.557686805725098,
+  "peak_gpu_memory_bytes": null,
+  "config": {
+    "model": {
+      "vocab_size": 32000,
+      "hidden_size": 768,
+      "num_layers": 6,
+      "num_heads": 12,
+      "intermediate_size": 2048,
+      "max_seq_len": 1024
+    },
+    "training": {
+      "batch_size": 2,
+      "sequence_length": 128,
+      "learning_rate": 0.0003,
+      "weight_decay": 0.1,
+      "warmup_steps": 5,
+      "steps": 20,
+      "seed": 42
+    },
+    "attention": {
+      "backend": "eager"
+    },
+    "runtime": {
+      "dtype": "float32",
+      "device": "auto"
+    },
+    "metrics": {
+      "enabled": false,
+      "port": 8000
+    }
+  },
+  "note": "Training-step timing includes random input generation, forward pass, backward pass, and optimizer update. Warm-up steps excluded. Profiler disabled."
+}

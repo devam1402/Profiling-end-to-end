@@ -43,7 +43,11 @@ def main():
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
-    model = TransformerLM(**model_cfg).to(device)
+    attention_backend = config.get("attention", {}).get("backend", "eager")
+    model = TransformerLM(
+        **model_cfg,
+        attention_backend=attention_backend,
+    ).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],

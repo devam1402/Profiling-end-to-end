@@ -64,7 +64,11 @@ def main():
     if device.type == "cuda":
         torch.cuda.manual_seed_all(train_cfg["seed"])
 
-    model = TransformerLM(**model_cfg).to(device)
+    attention_backend = config.get("attention", {}).get("backend", "eager")
+    model = TransformerLM(
+        **model_cfg,
+        attention_backend=attention_backend,
+    ).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],
@@ -146,6 +150,7 @@ def main():
         "pytorch_version": torch.__version__,
         "python_version": platform.python_version(),
         "steps": args.steps,
+        "attention_backend": attention_backend,
         "batch_size": batch_size,
         "sequence_length": seq_len,
         "parameters": sum(p.numel() for p in model.parameters()),

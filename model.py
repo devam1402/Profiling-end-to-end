@@ -45,8 +45,12 @@ class EagerAttention(nn.Module):
         self,
         hidden_size: int,
         num_heads: int,
+        backend: str = "eager",
     ):
         super().__init__()
+
+        if backend not in {"eager", "sdpa"}:
+            raise ValueError(f"Unsupported attention backend: {backend}")
 
         if hidden_size % num_heads != 0:
             raise ValueError(
@@ -56,6 +60,7 @@ class EagerAttention(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
+        self.backend = backend
 
         self.qkv = nn.Linear(
             hidden_size,
@@ -99,40 +104,48 @@ class EagerAttention(nn.Module):
             self.head_dim,
         ).transpose(1, 2)
 
-        scale = 1.0 / math.sqrt(self.head_dim)
+        if self.backend == "sdpa":
+            output = F.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                is_causal=True,
+            )
+        else:
+            scale = 1.0 / math.sqrt(self.head_dim)
 
-        # [B, heads, S, S]
-        scores = torch.matmul(
-            q,
-            k.transpose(-2, -1),
-        ) * scale
+            # [B, heads, S, S]
+            scores = torch.matmul(
+                q,
+                k.transpose(-2, -1),
+            ) * scale
 
-        # Causal mask.
-        causal_mask = torch.triu(
-            torch.ones(
-                seq_len,
-                seq_len,
-                device=x.device,
-                dtype=torch.bool,
-            ),
-            diagonal=1,
-        )
+            # Causal mask.
+            causal_mask = torch.triu(
+                torch.ones(
+                    seq_len,
+                    seq_len,
+                    device=x.device,
+                    dtype=torch.bool,
+                ),
+                diagonal=1,
+            )
 
-        scores = scores.masked_fill(
-            causal_mask,
-            float("-inf"),
-        )
+            scores = scores.masked_fill(
+                causal_mask,
+                float("-inf"),
+            )
 
-        attention = torch.softmax(
-            scores,
-            dim=-1,
-        )
+            attention = torch.softmax(
+                scores,
+                dim=-1,
+            )
 
-        # [B, heads, S, head_dim]
-        output = torch.matmul(
-            attention,
-            v,
-        )
+            # [B, heads, S, head_dim]
+            output = torch.matmul(
+                attention,
+                v,
+            )
 
         # [B, heads, S, head_dim]
         # -> [B, S, H]
@@ -191,6 +204,7 @@ class TransformerBlock(nn.Module):
         hidden_size: int,
         num_heads: int,
         intermediate_size: int,
+        attention_backend: str = "eager",
     ):
         super().__init__()
 
@@ -201,6 +215,7 @@ class TransformerBlock(nn.Module):
         self.attention = EagerAttention(
             hidden_size,
             num_heads,
+            backend=attention_backend,
         )
 
         self.norm2 = RMSNorm(
@@ -239,6 +254,7 @@ class TransformerLM(nn.Module):
         num_heads: int = 12,
         intermediate_size: int = 2048,
         max_seq_len: int = 1024,
+        attention_backend: str = "eager",
     ):
         super().__init__()
 
@@ -262,6 +278,7 @@ class TransformerLM(nn.Module):
                     hidden_size=hidden_size,
                     num_heads=num_heads,
                     intermediate_size=intermediate_size,
+                    attention_backend=attention_backend,
                 )
                 for _ in range(num_layers)
             ]

@@ -24,6 +24,12 @@ def main():
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--steps", type=int, default=5)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument(
+        "--attention-backend",
+        choices=["config", "eager", "sdpa"],
+        default="config",
+        help="Override config backend, or use the configured backend",
+    )
     args = parser.parse_args()
 
     if args.warmup < 0 or args.steps < 1:
@@ -55,7 +61,16 @@ def main():
     if device.type == "cuda":
         torch.cuda.manual_seed_all(train_cfg["seed"])
 
-    model = TransformerLM(**model_cfg).to(device)
+    configured_backend = config.get("attention", {}).get("backend", "eager")
+    attention_backend = (
+        configured_backend
+        if args.attention_backend == "config"
+        else args.attention_backend
+    )
+    model = TransformerLM(
+        **model_cfg,
+        attention_backend=attention_backend,
+    ).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],
@@ -114,6 +129,7 @@ def main():
             if device.type == "cuda" else "CPU"
         ),
         "pytorch_version": torch.__version__,
+        "attention_backend": attention_backend,
         "parameters": sum(p.numel() for p in model.parameters()),
         "warmup_steps": args.warmup,
         "measured_steps": args.steps,
@@ -148,6 +164,7 @@ def main():
 
     print(f"Device: {result['device']} ({result['device_name']})")
     print(f"Parameters: {result['parameters']:,}")
+    print(f"Attention backend: {result['attention_backend']}")
     print(f"Warm-up steps: {args.warmup}")
     print(f"Measured steps: {args.steps}")
     print(f"Average step: {result['average_step_seconds']:.3f} s")
