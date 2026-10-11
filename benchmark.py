@@ -1,0 +1,162 @@
+import argparse
+import json
+import statistics
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import torch
+import yaml
+
+from model import TransformerLM
+
+
+def synchronize(device):
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Repeatable Transformer training benchmark"
+    )
+    parser.add_argument("--config", default="configs/baseline.yaml")
+    parser.add_argument("--warmup", type=int, default=2)
+    parser.add_argument("--steps", type=int, default=5)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    args = parser.parse_args()
+
+    if args.warmup < 0 or args.steps < 1:
+        parser.error("--warmup must be >= 0 and --steps must be >= 1")
+
+    with open(args.config, encoding="utf-8") as file:
+        config = yaml.safe_load(file)
+
+    if args.device == "cuda" and not torch.cuda.is_available():
+        parser.error("CUDA was requested but is not available")
+
+    device_name = (
+        "cuda" if args.device == "cuda"
+        else "cpu" if args.device == "cpu"
+        else "cuda" if torch.cuda.is_available()
+        else "cpu"
+    )
+    device = torch.device(device_name)
+
+    model_cfg = config["model"]
+    train_cfg = config["training"]
+    batch_size = train_cfg["batch_size"]
+    seq_len = train_cfg["sequence_length"]
+
+    if seq_len < 2 or seq_len > model_cfg["max_seq_len"]:
+        parser.error("sequence_length must be between 2 and max_seq_len")
+
+    torch.manual_seed(train_cfg["seed"])
+    if device.type == "cuda":
+        torch.cuda.manual_seed_all(train_cfg["seed"])
+
+    model = TransformerLM(**model_cfg).to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=train_cfg["learning_rate"],
+        weight_decay=train_cfg["weight_decay"],
+    )
+
+    def train_step():
+        input_ids = torch.randint(
+            0,
+            model_cfg["vocab_size"],
+            (batch_size, seq_len),
+            device=device,
+        )
+        inputs, labels = input_ids[:, :-1], input_ids[:, 1:]
+
+        optimizer.zero_grad(set_to_none=True)
+        _, loss = model(inputs, labels)
+
+        if loss is None or not torch.isfinite(loss).item():
+            raise RuntimeError("Loss is missing or non-finite")
+
+        loss.backward()
+        optimizer.step()
+        return loss.detach()
+
+    model.train()
+
+    # Warm-up steps are excluded from timed measurements.
+    for _ in range(args.warmup):
+        train_step()
+    synchronize(device)
+
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
+
+    step_times = []
+    losses = []
+    for _ in range(args.steps):
+        synchronize(device)
+        start = time.perf_counter()
+        loss = train_step()
+        synchronize(device)
+        step_times.append(time.perf_counter() - start)
+        losses.append(loss.item())
+
+    elapsed = sum(step_times)
+    tokens_per_step = batch_size * (seq_len - 1)
+    median_step = statistics.median(step_times)
+
+    result = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "completed",
+        "device": str(device),
+        "device_name": (
+            torch.cuda.get_device_name(device)
+            if device.type == "cuda" else "CPU"
+        ),
+        "pytorch_version": torch.__version__,
+        "parameters": sum(p.numel() for p in model.parameters()),
+        "warmup_steps": args.warmup,
+        "measured_steps": args.steps,
+        "batch_size": batch_size,
+        "sequence_length": seq_len,
+        "tokens_per_step": tokens_per_step,
+        "total_measured_tokens": tokens_per_step * args.steps,
+        "total_measured_seconds": elapsed,
+        "average_step_seconds": statistics.mean(step_times),
+        "median_step_seconds": median_step,
+        "tokens_per_second": tokens_per_step / statistics.mean(step_times),
+        "step_times_seconds": step_times,
+        "losses": losses,
+        "final_loss": losses[-1],
+        "peak_gpu_memory_bytes": (
+            torch.cuda.max_memory_allocated(device)
+            if device.type == "cuda" else None
+        ),
+        "config": config,
+        "note": (
+            "Training-step timing includes random input generation, "
+            "forward pass, backward pass, and optimizer update. "
+            "Warm-up steps excluded. Profiler disabled."
+        ),
+    }
+
+    output_dir = Path("results/raw")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output_path = output_dir / f"benchmark_{timestamp}.json"
+    output_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+
+    print(f"Device: {result['device']} ({result['device_name']})")
+    print(f"Parameters: {result['parameters']:,}")
+    print(f"Warm-up steps: {args.warmup}")
+    print(f"Measured steps: {args.steps}")
+    print(f"Average step: {result['average_step_seconds']:.3f} s")
+    print(f"Median step: {result['median_step_seconds']:.3f} s")
+    print(f"Throughput: {result['tokens_per_second']:.1f} tokens/sec")
+    print(f"Final loss: {result['final_loss']:.4f}")
+    print(f"Peak GPU memory: {result['peak_gpu_memory_bytes']}")
+    print(f"Saved: {output_path}")
+
+
+if __name__ == "__main__":
+    main()
