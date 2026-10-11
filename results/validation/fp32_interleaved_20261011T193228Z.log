@@ -1,0 +1,128 @@
+===== Pair 1: eager =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: eager
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.044 s
+Average step: 43.9 ms
+Median step: 0.044 s
+Median step: 43.8 ms
+Throughput: 5788.4 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1346.4765625 MB
+Peak GPU reserved memory: 1578.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193234Z.json
+===== Pair 1: sdpa =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: sdpa
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.040 s
+Average step: 39.9 ms
+Median step: 0.040 s
+Median step: 39.7 ms
+Throughput: 6364.0 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1348.603515625 MB
+Peak GPU reserved memory: 1560.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193241Z.json
+===== Pair 2: eager =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: eager
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.044 s
+Average step: 43.6 ms
+Median step: 0.044 s
+Median step: 43.5 ms
+Throughput: 5826.3 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1346.4765625 MB
+Peak GPU reserved memory: 1578.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193247Z.json
+===== Pair 2: sdpa =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: sdpa
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.040 s
+Average step: 39.7 ms
+Median step: 0.040 s
+Median step: 39.6 ms
+Throughput: 6405.6 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1348.603515625 MB
+Peak GPU reserved memory: 1560.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193253Z.json
+===== Pair 3: eager =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: eager
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.044 s
+Average step: 44.4 ms
+Median step: 0.044 s
+Median step: 44.1 ms
+Throughput: 5723.0 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1346.4765625 MB
+Peak GPU reserved memory: 1578.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193300Z.json
+===== Pair 3: sdpa =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: sdpa
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.040 s
+Average step: 39.8 ms
+Median step: 0.040 s
+Median step: 39.7 ms
+Throughput: 6379.8 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1348.603515625 MB
+Peak GPU reserved memory: 1560.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193306Z.json
+===== Pair 4: eager =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: eager
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.044 s
+Average step: 44.4 ms
+Median step: 0.044 s
+Median step: 44.2 ms
+Throughput: 5715.0 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1346.4765625 MB
+Peak GPU reserved memory: 1578.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193313Z.json
+===== Pair 4: sdpa =====
+Device: cuda (NVIDIA L4)
+Parameters: 67,839,744
+Attention backend: sdpa
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.040 s
+Average step: 39.8 ms
+Median step: 0.040 s
+Median step: 39.7 ms
+Throughput: 6379.3 tokens/sec
+Final loss: 10.4918
+Peak GPU allocated memory: 1348.603515625 MB
+Peak GPU reserved memory: 1560.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T193319Z.json

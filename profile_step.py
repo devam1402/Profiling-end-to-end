@@ -1,10 +1,12 @@
 import argparse
+from contextlib import nullcontext
 import json
 import platform
 from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
 import yaml
 from torch.profiler import (
     ProfilerActivity,
@@ -38,6 +40,18 @@ def main():
         choices=["config", "eager", "sdpa"],
         default="config",
         help="Override the attention backend in the config.",
+    )
+    parser.add_argument(
+        "--precision",
+        choices=["fp32", "bf16"],
+        default="fp32",
+        help="Compute precision; BF16 uses autocast with FP32 model parameters.",
+    )
+    parser.add_argument(
+        "--sdpa-backend",
+        choices=["default", "flash"],
+        default="default",
+        help="Select SDPA backend; flash forces Flash Attention.",
     )
     args = parser.parse_args()
 
@@ -81,6 +95,11 @@ def main():
         attention_backend=attention_backend,
     ).to(device)
 
+    if args.sdpa_backend == "flash" and attention_backend != "sdpa":
+        parser.error("--sdpa-backend flash requires --attention-backend sdpa")
+    if args.precision == "bf16" and device.type != "cuda":
+        parser.error("--precision bf16 currently requires --device cuda")
+
     attention_modules = [
         module for module in model.modules()
         if hasattr(module, "backend")
@@ -114,6 +133,12 @@ def main():
     print(f"PyTorch: {torch.__version__}")
     print(f"Python: {platform.python_version()}")
     print(f"Profiling steps: {args.steps}")
+    print(f"Attention backend: {attention_backend}")
+    print(f"Precision: {args.precision}")
+    print(
+        "SDPA backend: "
+        + ("FLASH_ATTENTION" if args.sdpa_backend == "flash" else "default")
+    )
     print("Profiler overhead is expected; do not use this run for throughput.")
 
     forward_event_pairs = []
@@ -142,8 +167,19 @@ def main():
                 forward_end = torch.cuda.Event(enable_timing=True)
                 forward_start.record()
 
-            with record_function("training_forward_loss"):
-                _, loss = model(inputs, labels)
+            backend_context = (
+                sdpa_kernel(SDPBackend.FLASH_ATTENTION)
+                if args.sdpa_backend == "flash"
+                else nullcontext()
+            )
+            with torch.autocast(
+                device_type=device.type,
+                dtype=torch.bfloat16,
+                enabled=args.precision == "bf16",
+            ):
+                with backend_context:
+                    with record_function("training_forward_loss"):
+                        _, loss = model(inputs, labels)
 
             if device.type == "cuda":
                 forward_end.record()
@@ -248,6 +284,10 @@ def main():
         "python_version": platform.python_version(),
         "steps": args.steps,
         "attention_backend": attention_backend,
+        "precision": args.precision,
+        "sdpa_backend": (
+            "FLASH_ATTENTION" if args.sdpa_backend == "flash" else "default"
+        ),
         "batch_size": batch_size,
         "sequence_length": seq_len,
         "parameters": sum(p.numel() for p in model.parameters()),

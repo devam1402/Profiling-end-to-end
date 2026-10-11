@@ -1,0 +1,23 @@
+model:
+  vocab_size: 32000
+  hidden_size: 768
+  num_layers: 6
+  num_heads: 12
+  intermediate_size: 2048
+  max_seq_len: 2048
+training:
+  batch_size: 2
+  sequence_length: 2048
+  learning_rate: 0.0003
+  weight_decay: 0.1
+  warmup_steps: 5
+  steps: 20
+  seed: 42
+attention:
+  backend: eager
+runtime:
+  dtype: float32
+  device: auto
+metrics:
+  enabled: false
+  port: 8000

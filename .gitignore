@@ -7,3 +7,6 @@ __pycache__/
 .env
 results/traces/*.json
 results/raw/run_*.json
+
+# Local source backups
+*.bak

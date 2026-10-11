@@ -1,4 +1,5 @@
 import argparse
+from contextlib import nullcontext
 import json
 import platform
 import statistics
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
 import yaml
 
 from model import TransformerLM
@@ -42,6 +44,24 @@ def main():
         choices=["config", "eager", "sdpa"],
         default="config",
         help="Override config backend, or use the configured backend",
+    )
+    parser.add_argument(
+        "--precision",
+        choices=["fp32", "bf16"],
+        default="fp32",
+        help="Compute precision; BF16 uses autocast with FP32 model parameters",
+    )
+    parser.add_argument(
+        "--sdpa-backend",
+        choices=["default", "flash"],
+        default="default",
+        help="Select the SDPA backend; flash forces Flash Attention",
+    )
+    parser.add_argument(
+        "--optimizer",
+        choices=["adamw", "fused_adamw"],
+        default="adamw",
+        help="Optimizer implementation for controlled comparisons",
     )
     args = parser.parse_args()
 
@@ -84,10 +104,16 @@ def main():
         **model_cfg,
         attention_backend=attention_backend,
     ).to(device)
+    if args.sdpa_backend == "flash" and attention_backend != "sdpa":
+        parser.error("--sdpa-backend flash requires --attention-backend sdpa")
+    if args.precision == "bf16" and device.type != "cuda":
+        parser.error("--precision bf16 currently requires --device cuda")
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],
         weight_decay=train_cfg["weight_decay"],
+        fused=(args.optimizer == "fused_adamw"),
     )
 
     def train_step():
@@ -100,7 +126,19 @@ def main():
         inputs, labels = input_ids[:, :-1], input_ids[:, 1:]
 
         optimizer.zero_grad(set_to_none=True)
-        _, loss = model(inputs, labels)
+
+        backend_context = (
+            sdpa_kernel(SDPBackend.FLASH_ATTENTION)
+            if args.sdpa_backend == "flash"
+            else nullcontext()
+        )
+        with torch.autocast(
+            device_type=device.type,
+            dtype=torch.bfloat16,
+            enabled=args.precision == "bf16",
+        ):
+            with backend_context:
+                _, loss = model(inputs, labels)
 
         if loss is None or not torch.isfinite(loss).item():
             raise RuntimeError("Loss is missing or non-finite")
@@ -151,6 +189,11 @@ def main():
         "configured_dtype": config.get("runtime", {}).get("dtype", "float32"),
         "actual_model_dtype": str(next(model.parameters()).dtype),
         "attention_backend": attention_backend,
+        "precision": args.precision,
+        "sdpa_backend": (
+            "FLASH_ATTENTION" if args.sdpa_backend == "flash" else "default"
+        ),
+        "optimizer": args.optimizer,
         "parameters": sum(p.numel() for p in model.parameters()),
         "warmup_steps": args.warmup,
         "measured_steps": args.steps,
@@ -201,6 +244,9 @@ def main():
     print(f"Device: {result['device']} ({result['device_name']})")
     print(f"Parameters: {result['parameters']:,}")
     print(f"Attention backend: {result['attention_backend']}")
+    print(f"Precision: {result['precision']}")
+    print(f"SDPA backend: {result['sdpa_backend']}")
+    print(f"Optimizer: {result['optimizer']}")
     print(f"Warm-up steps: {args.warmup}")
     print(f"Measured steps: {args.steps}")
     print(f"Average step: {result['average_step_seconds']:.3f} s")

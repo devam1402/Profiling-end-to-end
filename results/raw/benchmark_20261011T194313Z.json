@@ -1,0 +1,82 @@
+{
+  "timestamp_utc": "2026-10-11T19:43:13.137350+00:00",
+  "status": "completed",
+  "device": "cuda",
+  "device_name": "NVIDIA L4",
+  "pytorch_version": "2.14.1+cu130",
+  "python_version": "3.12.3",
+  "platform": "Linux-6.7.10-060710-generic-x86_64-with-glibc2.39",
+  "cuda_build_version": "13.0",
+  "git_commit": "0235f40bfb4ae2b6b7a772a077cf448a27989885",
+  "config_path": "/workspace/perf-transformer/configs/validation_seq2048.yaml",
+  "seed": 42,
+  "configured_dtype": "float32",
+  "actual_model_dtype": "torch.float32",
+  "attention_backend": "eager",
+  "precision": "bf16",
+  "sdpa_backend": "default",
+  "parameters": 68626176,
+  "warmup_steps": 2,
+  "measured_steps": 3,
+  "batch_size": 2,
+  "sequence_length": 2048,
+  "tokens_per_step": 4094,
+  "total_measured_tokens": 12282,
+  "total_measured_seconds": 0.9917227760888636,
+  "average_step_seconds": 0.33057425869628787,
+  "median_step_seconds": 0.330582186114043,
+  "tokens_per_second": 12384.509356977265,
+  "step_times_seconds": [
+    0.33048716001212597,
+    0.33065342996269464,
+    0.330582186114043
+  ],
+  "step_times_ms": [
+    330.48716001212597,
+    330.65342996269464,
+    330.582186114043
+  ],
+  "average_step_ms": 330.57425869628787,
+  "median_step_ms": 330.582186114043,
+  "losses": [
+    10.533432960510254,
+    10.5256929397583,
+    10.534364700317383
+  ],
+  "final_loss": 10.534364700317383,
+  "peak_gpu_memory_bytes": 7207540224,
+  "peak_gpu_memory_mb": 6873.64599609375,
+  "peak_gpu_reserved_memory_bytes": 7868514304,
+  "peak_gpu_reserved_memory_mb": 7504.0,
+  "config": {
+    "model": {
+      "vocab_size": 32000,
+      "hidden_size": 768,
+      "num_layers": 6,
+      "num_heads": 12,
+      "intermediate_size": 2048,
+      "max_seq_len": 2048
+    },
+    "training": {
+      "batch_size": 2,
+      "sequence_length": 2048,
+      "learning_rate": 0.0003,
+      "weight_decay": 0.1,
+      "warmup_steps": 5,
+      "steps": 20,
+      "seed": 42
+    },
+    "attention": {
+      "backend": "eager"
+    },
+    "runtime": {
+      "dtype": "float32",
+      "device": "auto"
+    },
+    "metrics": {
+      "enabled": false,
+      "port": 8000
+    }
+  },
+  "note": "Training-step timing includes random input generation, forward pass, backward pass, and optimizer update. Warm-up steps excluded. Profiler disabled."
+}

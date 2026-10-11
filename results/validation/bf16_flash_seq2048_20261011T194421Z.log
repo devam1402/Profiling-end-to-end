@@ -1,0 +1,144 @@
+===== Pair 1: EAGER =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: eager
+Precision: bf16
+SDPA backend: default
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.330 s
+Average step: 330.2 ms
+Median step: 0.330 s
+Median step: 330.2 ms
+Throughput: 12396.8 tokens/sec
+Final loss: 10.5161
+Peak GPU allocated memory: 6873.64599609375 MB
+Peak GPU reserved memory: 7504.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194437Z.json
+===== Pair 1: FLASH =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.096 s
+Average step: 96.2 ms
+Median step: 0.096 s
+Median step: 96.2 ms
+Throughput: 42576.8 tokens/sec
+Final loss: 10.5163
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194446Z.json
+===== Pair 2: EAGER =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: eager
+Precision: bf16
+SDPA backend: default
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.331 s
+Average step: 330.7 ms
+Median step: 0.331 s
+Median step: 330.7 ms
+Throughput: 12381.3 tokens/sec
+Final loss: 10.5161
+Peak GPU allocated memory: 6873.64599609375 MB
+Peak GPU reserved memory: 7504.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194503Z.json
+===== Pair 2: FLASH =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.097 s
+Average step: 96.9 ms
+Median step: 0.097 s
+Median step: 96.5 ms
+Throughput: 42255.9 tokens/sec
+Final loss: 10.5164
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194511Z.json
+===== Pair 3: EAGER =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: eager
+Precision: bf16
+SDPA backend: default
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.331 s
+Average step: 330.9 ms
+Median step: 0.331 s
+Median step: 330.9 ms
+Throughput: 12371.6 tokens/sec
+Final loss: 10.5161
+Peak GPU allocated memory: 6873.64599609375 MB
+Peak GPU reserved memory: 7504.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194528Z.json
+===== Pair 3: FLASH =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.097 s
+Average step: 96.8 ms
+Median step: 0.097 s
+Median step: 96.8 ms
+Throughput: 42313.8 tokens/sec
+Final loss: 10.5165
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194536Z.json
+===== Pair 4: EAGER =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: eager
+Precision: bf16
+SDPA backend: default
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.331 s
+Average step: 331.0 ms
+Median step: 0.331 s
+Median step: 331.0 ms
+Throughput: 12367.1 tokens/sec
+Final loss: 10.5161
+Peak GPU allocated memory: 6873.64599609375 MB
+Peak GPU reserved memory: 7504.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194553Z.json
+===== Pair 4: FLASH =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.097 s
+Average step: 96.8 ms
+Median step: 0.097 s
+Median step: 96.6 ms
+Throughput: 42273.9 tokens/sec
+Final loss: 10.5162
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T194602Z.json

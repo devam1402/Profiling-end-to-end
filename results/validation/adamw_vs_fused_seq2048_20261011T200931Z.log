@@ -1,0 +1,152 @@
+===== Pair 1: STANDARD ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.089 s
+Average step: 88.5 ms
+Median step: 0.088 s
+Median step: 88.2 ms
+Throughput: 46248.2 tokens/sec
+Final loss: 10.5164
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T200939Z.json
+===== Pair 1: FUSED ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: fused_adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.082 s
+Average step: 81.8 ms
+Median step: 0.082 s
+Median step: 81.6 ms
+Throughput: 50045.9 tokens/sec
+Final loss: 10.5163
+Peak GPU allocated memory: 3398.53076171875 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T200947Z.json
+===== Pair 2: STANDARD ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.089 s
+Average step: 88.9 ms
+Median step: 0.088 s
+Median step: 88.4 ms
+Throughput: 46071.1 tokens/sec
+Final loss: 10.5163
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T200955Z.json
+===== Pair 2: FUSED ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: fused_adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.082 s
+Average step: 82.3 ms
+Median step: 0.082 s
+Median step: 82.0 ms
+Throughput: 49756.9 tokens/sec
+Final loss: 10.5165
+Peak GPU allocated memory: 3398.53076171875 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T201002Z.json
+===== Pair 3: STANDARD ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.089 s
+Average step: 88.9 ms
+Median step: 0.088 s
+Median step: 88.5 ms
+Throughput: 46040.8 tokens/sec
+Final loss: 10.5164
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T201010Z.json
+===== Pair 3: FUSED ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: fused_adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.083 s
+Average step: 82.6 ms
+Median step: 0.082 s
+Median step: 82.3 ms
+Throughput: 49534.3 tokens/sec
+Final loss: 10.5162
+Peak GPU allocated memory: 3398.53076171875 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T201018Z.json
+===== Pair 4: STANDARD ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.090 s
+Average step: 89.7 ms
+Median step: 0.090 s
+Median step: 89.7 ms
+Throughput: 45634.6 tokens/sec
+Final loss: 10.5161
+Peak GPU allocated memory: 3398.5087890625 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T201027Z.json
+===== Pair 4: FUSED ADAMW =====
+Device: cuda (NVIDIA L4)
+Parameters: 68,626,176
+Attention backend: sdpa
+Precision: bf16
+SDPA backend: FLASH_ATTENTION
+Optimizer: fused_adamw
+Warm-up steps: 5
+Measured steps: 30
+Average step: 0.083 s
+Average step: 82.6 ms
+Median step: 0.082 s
+Median step: 82.3 ms
+Throughput: 49592.4 tokens/sec
+Final loss: 10.5167
+Peak GPU allocated memory: 3398.53076171875 MB
+Peak GPU reserved memory: 3904.0 MB
+Git commit: 0235f40bfb4ae2b6b7a772a077cf448a27989885
+Saved: results/raw/benchmark_20261011T201035Z.json
