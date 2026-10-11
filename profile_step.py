@@ -33,6 +33,12 @@ def main():
         choices=["auto", "cpu", "cuda"],
         default="auto",
     )
+    parser.add_argument(
+        "--attention-backend",
+        choices=["config", "eager", "sdpa"],
+        default="config",
+        help="Override the attention backend in the config.",
+    )
     args = parser.parse_args()
 
     if args.steps < 1:
@@ -64,11 +70,27 @@ def main():
     if device.type == "cuda":
         torch.cuda.manual_seed_all(train_cfg["seed"])
 
-    attention_backend = config.get("attention", {}).get("backend", "eager")
+    configured_backend = config.get("attention", {}).get("backend", "eager")
+    attention_backend = (
+        configured_backend
+        if args.attention_backend == "config"
+        else args.attention_backend
+    )
     model = TransformerLM(
         **model_cfg,
         attention_backend=attention_backend,
     ).to(device)
+
+    attention_modules = [
+        module for module in model.modules()
+        if hasattr(module, "backend")
+        and hasattr(module, "_cuda_attention_event_pairs")
+    ]
+    if device.type == "cuda":
+        for module in attention_modules:
+            module._profile_cuda_attention = True
+            module._cuda_attention_event_pairs.clear()
+
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=train_cfg["learning_rate"],
@@ -94,6 +116,8 @@ def main():
     print(f"Profiling steps: {args.steps}")
     print("Profiler overhead is expected; do not use this run for throughput.")
 
+    forward_event_pairs = []
+
     with profile(
         activities=activities,
         record_shapes=True,
@@ -112,8 +136,18 @@ def main():
 
             optimizer.zero_grad(set_to_none=True)
 
+            forward_start = forward_end = None
+            if device.type == "cuda":
+                forward_start = torch.cuda.Event(enable_timing=True)
+                forward_end = torch.cuda.Event(enable_timing=True)
+                forward_start.record()
+
             with record_function("training_forward_loss"):
                 _, loss = model(inputs, labels)
+
+            if device.type == "cuda":
+                forward_end.record()
+                forward_event_pairs.append((forward_start, forward_end))
 
             if loss is None or not torch.isfinite(loss).item():
                 raise RuntimeError(f"Invalid loss at step {step + 1}")
@@ -130,15 +164,78 @@ def main():
             prof.step()
             print(f"Step {step + 1}/{args.steps}: loss={loss.item():.4f}")
 
-    print("\nTop operators by CPU self time:")
+    averages = prof.key_averages()
+
+    print("\nTop 5 operators by CPU self time:")
     print(
-        prof.key_averages().table(
+        averages.table(
             sort_by="self_cpu_time_total",
-            row_limit=20,
+            row_limit=5,
         )
     )
 
+    if device.type == "cuda":
+        print("\nTop 5 operators by CUDA self time:")
+        print(
+            averages.table(
+                sort_by="self_cuda_time_total",
+                row_limit=5,
+            )
+        )
+
+    # These are CPU-side profiler-range durations, not GPU kernel time.
+    range_times = {
+        event.key: event.cpu_time_total
+        for event in averages
+    }
+    attention_cpu_us = range_times.get("attention_compute", 0.0)
+    forward_cpu_us = range_times.get("training_forward_loss", 0.0)
+
+    print("\nCPU-side profiler ranges (aggregated across profiled steps):")
+    print(f"  attention_compute: {attention_cpu_us / 1000:.3f} ms")
+    print(f"  training_forward_loss: {forward_cpu_us / 1000:.3f} ms")
+
+    if forward_cpu_us > 0:
+        share = 100.0 * attention_cpu_us / forward_cpu_us
+        print(
+            "  attention range / forward-loss CPU time: "
+            f"{share:.1f}% (not GPU-time share)"
+        )
+
     prof.export_chrome_trace(str(trace_path))
+
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        event_pairs = [
+            pair
+            for module in attention_modules
+            for pair in module._cuda_attention_event_pairs
+        ]
+        attention_ms = sum(
+            start.elapsed_time(end)
+            for start, end in event_pairs
+        )
+        forward_ms = sum(
+            start.elapsed_time(end)
+            for start, end in forward_event_pairs
+        )
+        print(
+            "\nCUDA-event attention compute time "
+            f"(summed across layers and steps): {attention_ms:.3f} ms"
+        )
+        print(
+            "CUDA-event forward-pass time "
+            f"(summed across steps): {forward_ms:.3f} ms"
+        )
+        if forward_ms > 0:
+            print(
+                "Attention compute / forward-pass time: "
+                f"{100.0 * attention_ms / forward_ms:.1f}%"
+            )
+        print(
+            "Attention timing excludes QKV projections, output projection, "
+            "and backward computation."
+        )
 
     metadata = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),

@@ -1,0 +1,101 @@
+{
+  "timestamp_utc": "2026-10-11T18:35:43.502304+00:00",
+  "status": "completed",
+  "device": "cuda",
+  "device_name": "NVIDIA L4",
+  "pytorch_version": "2.14.1+cu130",
+  "python_version": "3.12.3",
+  "platform": "Linux-6.7.10-060710-generic-x86_64-with-glibc2.39",
+  "cuda_build_version": "13.0",
+  "git_commit": "31489ca7049d4591e2873988c3a0ca69a0f814b9",
+  "config_path": "/workspace/perf-transformer/configs/baseline.yaml",
+  "seed": 42,
+  "configured_dtype": "float32",
+  "actual_model_dtype": "torch.float32",
+  "attention_backend": "sdpa",
+  "parameters": 67839744,
+  "warmup_steps": 3,
+  "measured_steps": 10,
+  "batch_size": 2,
+  "sequence_length": 128,
+  "tokens_per_step": 254,
+  "total_measured_tokens": 2540,
+  "total_measured_seconds": 0.3973942850716412,
+  "average_step_seconds": 0.03973942850716412,
+  "median_step_seconds": 0.03945163055323064,
+  "tokens_per_second": 6391.636959605736,
+  "step_times_seconds": [
+    0.03922608098946512,
+    0.039159815991297364,
+    0.03929864591918886,
+    0.04030698793940246,
+    0.03950231592170894,
+    0.03926634602248669,
+    0.03941254713572562,
+    0.040556814055889845,
+    0.03949071397073567,
+    0.04117401712574065
+  ],
+  "step_times_ms": [
+    39.22608098946512,
+    39.159815991297364,
+    39.29864591918886,
+    40.30698793940246,
+    39.50231592170894,
+    39.26634602248669,
+    39.41254713572562,
+    40.556814055889845,
+    39.49071397073567,
+    41.17401712574065
+  ],
+  "average_step_ms": 39.73942850716412,
+  "median_step_ms": 39.45163055323064,
+  "losses": [
+    10.530967712402344,
+    10.519987106323242,
+    10.563436508178711,
+    10.564435958862305,
+    10.51695728302002,
+    10.564555168151855,
+    10.478902816772461,
+    10.494808197021484,
+    10.531495094299316,
+    10.588897705078125
+  ],
+  "final_loss": 10.588897705078125,
+  "peak_gpu_memory_bytes": 1414113280,
+  "peak_gpu_memory_mb": 1348.603515625,
+  "peak_gpu_reserved_memory_bytes": 1635778560,
+  "peak_gpu_reserved_memory_mb": 1560.0,
+  "config": {
+    "model": {
+      "vocab_size": 32000,
+      "hidden_size": 768,
+      "num_layers": 6,
+      "num_heads": 12,
+      "intermediate_size": 2048,
+      "max_seq_len": 1024
+    },
+    "training": {
+      "batch_size": 2,
+      "sequence_length": 128,
+      "learning_rate": 0.0003,
+      "weight_decay": 0.1,
+      "warmup_steps": 5,
+      "steps": 20,
+      "seed": 42
+    },
+    "attention": {
+      "backend": "eager"
+    },
+    "runtime": {
+      "dtype": "float32",
+      "device": "auto"
+    },
+    "metrics": {
+      "enabled": false,
+      "port": 8000
+    }
+  },
+  "note": "Training-step timing includes random input generation, forward pass, backward pass, and optimizer update. Warm-up steps excluded. Profiler disabled."
+}

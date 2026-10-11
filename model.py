@@ -2,6 +2,7 @@ import math
 from typing import Optional
 
 import torch
+from torch.profiler import record_function
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -61,6 +62,8 @@ class EagerAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         self.backend = backend
+        self._profile_cuda_attention = False
+        self._cuda_attention_event_pairs = []
 
         self.qkv = nn.Linear(
             hidden_size,
@@ -104,47 +107,65 @@ class EagerAttention(nn.Module):
             self.head_dim,
         ).transpose(1, 2)
 
-        if self.backend == "sdpa":
-            output = F.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                is_causal=True,
-            )
-        else:
-            scale = 1.0 / math.sqrt(self.head_dim)
+        profile_cuda = (
+            getattr(self, "_profile_cuda_attention", False)
+            and x.is_cuda
+        )
+        start_event = end_event = None
 
-            # [B, heads, S, S]
-            scores = torch.matmul(
-                q,
-                k.transpose(-2, -1),
-            ) * scale
+        if profile_cuda:
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
 
-            # Causal mask.
-            causal_mask = torch.triu(
-                torch.ones(
-                    seq_len,
-                    seq_len,
-                    device=x.device,
-                    dtype=torch.bool,
-                ),
-                diagonal=1,
-            )
+        with record_function("attention_compute"):
+            if self.backend == "sdpa":
+                output = F.scaled_dot_product_attention(
+                    q,
+                    k,
+                    v,
+                    is_causal=True,
+                )
+            else:
+                scale = 1.0 / math.sqrt(self.head_dim)
 
-            scores = scores.masked_fill(
-                causal_mask,
-                float("-inf"),
-            )
+                # [B, heads, S, S]
+                scores = torch.matmul(
+                    q,
+                    k.transpose(-2, -1),
+                ) * scale
 
-            attention = torch.softmax(
-                scores,
-                dim=-1,
-            )
+                # Causal mask.
+                causal_mask = torch.triu(
+                    torch.ones(
+                        seq_len,
+                        seq_len,
+                        device=x.device,
+                        dtype=torch.bool,
+                    ),
+                    diagonal=1,
+                )
 
-            # [B, heads, S, head_dim]
-            output = torch.matmul(
-                attention,
-                v,
+                scores = scores.masked_fill(
+                    causal_mask,
+                    float("-inf"),
+                )
+
+                attention = torch.softmax(
+                    scores,
+                    dim=-1,
+                )
+
+                # [B, heads, S, head_dim]
+                output = torch.matmul(
+                    attention,
+                    v,
+                )
+
+        if profile_cuda:
+            end_event.record()
+            self._cuda_attention_event_pairs.append(
+                (start_event, end_event)
             )
 
         # [B, heads, S, head_dim]
