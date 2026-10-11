@@ -1,0 +1,11 @@
+{
+  "milestone": "local_training_loop",
+  "status": "passed",
+  "device": "cpu",
+  "parameters": 67839744,
+  "steps_completed": 5,
+  "elapsed_seconds": 8.76,
+  "average_step_seconds": 1.753,
+  "tokens_per_second": 144.9,
+  "note": "Initial smoke test; not a GPU benchmark."
+}
