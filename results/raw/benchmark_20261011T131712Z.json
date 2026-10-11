@@ -1,0 +1,77 @@
+{
+  "timestamp_utc": "2026-10-11T13:17:12.667131+00:00",
+  "status": "completed",
+  "device": "cpu",
+  "device_name": "CPU",
+  "pytorch_version": "2.14.1+cu130",
+  "python_version": "3.12.3",
+  "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+  "cuda_build_version": "13.0",
+  "git_commit": "65ae5d0ce76e96ed411ff77cc7a5495d43be64d7",
+  "config_path": "/home/vboxuser/perf-transformer/configs/baseline.yaml",
+  "seed": 42,
+  "configured_dtype": "float32",
+  "actual_model_dtype": "torch.float32",
+  "attention_backend": "eager",
+  "parameters": 67839744,
+  "warmup_steps": 1,
+  "measured_steps": 2,
+  "batch_size": 2,
+  "sequence_length": 128,
+  "tokens_per_step": 254,
+  "total_measured_tokens": 508,
+  "total_measured_seconds": 2.575972495978931,
+  "average_step_seconds": 1.2879862479894655,
+  "median_step_seconds": 1.2879862479894655,
+  "tokens_per_second": 197.20707452932174,
+  "step_times_seconds": [
+    1.2680789349833503,
+    1.3078935609955806
+  ],
+  "step_times_ms": [
+    1268.0789349833503,
+    1307.8935609955806
+  ],
+  "average_step_ms": 1287.9862479894655,
+  "median_step_ms": 1287.9862479894655,
+  "losses": [
+    10.532586097717285,
+    10.561270713806152
+  ],
+  "final_loss": 10.561270713806152,
+  "peak_gpu_memory_bytes": null,
+  "peak_gpu_memory_mb": null,
+  "peak_gpu_reserved_memory_bytes": null,
+  "peak_gpu_reserved_memory_mb": null,
+  "config": {
+    "model": {
+      "vocab_size": 32000,
+      "hidden_size": 768,
+      "num_layers": 6,
+      "num_heads": 12,
+      "intermediate_size": 2048,
+      "max_seq_len": 1024
+    },
+    "training": {
+      "batch_size": 2,
+      "sequence_length": 128,
+      "learning_rate": 0.0003,
+      "weight_decay": 0.1,
+      "warmup_steps": 5,
+      "steps": 20,
+      "seed": 42
+    },
+    "attention": {
+      "backend": "eager"
+    },
+    "runtime": {
+      "dtype": "float32",
+      "device": "auto"
+    },
+    "metrics": {
+      "enabled": false,
+      "port": 8000
+    }
+  },
+  "note": "Training-step timing includes random input generation, forward pass, backward pass, and optimizer update. Warm-up steps excluded. Profiler disabled."
+}

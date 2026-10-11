@@ -1,6 +1,9 @@
 import argparse
 import json
+import platform
 import statistics
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +12,16 @@ import torch
 import yaml
 
 from model import TransformerLM
+
+
+def git_commit():
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def synchronize(device):
@@ -129,6 +142,14 @@ def main():
             if device.type == "cuda" else "CPU"
         ),
         "pytorch_version": torch.__version__,
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "cuda_build_version": torch.version.cuda,
+        "git_commit": git_commit(),
+        "config_path": str(Path(args.config).resolve()),
+        "seed": train_cfg["seed"],
+        "configured_dtype": config.get("runtime", {}).get("dtype", "float32"),
+        "actual_model_dtype": str(next(model.parameters()).dtype),
         "attention_backend": attention_backend,
         "parameters": sum(p.numel() for p in model.parameters()),
         "warmup_steps": args.warmup,
@@ -142,10 +163,25 @@ def main():
         "median_step_seconds": median_step,
         "tokens_per_second": tokens_per_step / statistics.mean(step_times),
         "step_times_seconds": step_times,
+        "step_times_ms": [value * 1000 for value in step_times],
+        "average_step_ms": statistics.mean(step_times) * 1000,
+        "median_step_ms": median_step * 1000,
         "losses": losses,
         "final_loss": losses[-1],
         "peak_gpu_memory_bytes": (
             torch.cuda.max_memory_allocated(device)
+            if device.type == "cuda" else None
+        ),
+        "peak_gpu_memory_mb": (
+            torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+            if device.type == "cuda" else None
+        ),
+        "peak_gpu_reserved_memory_bytes": (
+            torch.cuda.max_memory_reserved(device)
+            if device.type == "cuda" else None
+        ),
+        "peak_gpu_reserved_memory_mb": (
+            torch.cuda.max_memory_reserved(device) / (1024 ** 2)
             if device.type == "cuda" else None
         ),
         "config": config,
@@ -168,10 +204,14 @@ def main():
     print(f"Warm-up steps: {args.warmup}")
     print(f"Measured steps: {args.steps}")
     print(f"Average step: {result['average_step_seconds']:.3f} s")
+    print(f"Average step: {result['average_step_ms']:.1f} ms")
     print(f"Median step: {result['median_step_seconds']:.3f} s")
+    print(f"Median step: {result['median_step_ms']:.1f} ms")
     print(f"Throughput: {result['tokens_per_second']:.1f} tokens/sec")
     print(f"Final loss: {result['final_loss']:.4f}")
-    print(f"Peak GPU memory: {result['peak_gpu_memory_bytes']}")
+    print(f"Peak GPU allocated memory: {result['peak_gpu_memory_mb']} MB")
+    print(f"Peak GPU reserved memory: {result['peak_gpu_reserved_memory_mb']} MB")
+    print(f"Git commit: {result['git_commit']}")
     print(f"Saved: {output_path}")
 
 
