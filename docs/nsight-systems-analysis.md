@@ -1,6 +1,6 @@
 # Nsight Systems Analysis
 
-**Status:** Initial CUDA timeline captured; attribution is still incomplete.  
+**Status:** Initial timeline captured; controlled input-placement comparison and clean post-warm-up slice are pending.  
 **Date:** 2026-10-16  
 **Hardware:** NVIDIA L4 (23,034 MiB reported by NVIDIA-SMI)  
 **Software:** Ubuntu 24.04-based container, NVIDIA driver 580.126.20, PyTorch 2.14.1+cu130, Python 3.12.3, Nsight Systems CLI 2026.5.1.161.
@@ -84,21 +84,40 @@ The PyTorch Profiler output from that run remains useful as a separate measureme
 
 These CPU-side operator timings are not directly comparable with CUDA-event timings. The 6.3% attention ratio applies only to the instrumented forward-pass scope and the attention region measured; it is not attention's share of total training time. The optimizer-related operator observation is a lead for future investigation, not a confirmed bottleneck.
 
+## Controlled input-placement comparison
+
+The existing benchmark already supports device-generated synthetic inputs. A host-input mode has now been added to `benchmark.py`:
+
+- `--input-mode device`: create synthetic token IDs with `torch.randint(..., device="cuda")`.
+- `--input-mode host`: create the same shape of synthetic token IDs on CPU, then call `.to(device, non_blocking=True)`.
+
+Both modes include input generation in the measured step interval. The host mode uses ordinary CPU tensors rather than pinned-memory prefetching, so this experiment tests host generation plus transfer cost; it does not claim to represent an optimized production input pipeline.
+
+Run the interleaved comparison on the L4 with the best measured model configuration (BF16 autocast, forced Flash Attention, fused AdamW, sequence length 2,048):
+
+```bash
+python compare_input_modes.py --pairs 4 --warmup 5 --steps 30
+```
+
+The script alternates run order across pairs, leaves `configs/baseline.yaml` unchanged, and writes individual benchmark JSONs plus an aggregate report under `results/validation/`. **The result must be run on the GPU host; this document does not yet claim that H2D traffic is or is not a limiter.**
+
+The token batch itself is only about 32 KB for batch size 2, sequence length 2,048, and int64 token IDs. The previously observed ~6.3 MB H2D operations are much larger than that input batch, so their source must not be inferred from size alone. If needed, use a short clean Nsight Systems capture of each mode to correlate transfer activity with the warmed-up step timeline.
+
 ## Current conclusions
 
-1. Flash Attention kernels are present in the initial Nsight Systems capture.
-2. Library initialization is a substantial component of the short process-level trace; separate it from steady-state execution before optimizing.
-3. Synchronization calls, launch activity, and memory transfers are visible, but no one of these is yet proven to be the dominant avoidable cost.
-4. Existing NVTX output does not provide reliable top-level model-phase attribution.
-5. Do not run PyTorch Profiler and Nsight Systems CUDA tracing together in this environment; collect each separately.
+1. Flash Attention kernels were observed in the initial Nsight Systems capture; a clean post-warm-up slice is still needed to document their steady-state placement.
+2. Library loading dominates part of the short process-level trace and should be treated as startup rather than steady-state step cost.
+3. H2D transfers were observed, but their contribution to steady-state step time remains unproven until the controlled input-placement comparison is run.
+4. Existing NVTX output did not provide reliable top-level forward/backward/optimizer attribution. Accept this limitation rather than adding ranges solely for this write-up.
+5. The capture used for initial kernel observations ran `benchmark.py` without PyTorch Profiler and did not report the CUPTI multiple-subscriber error. The separate nested PyTorch Profiler + Nsight attempt did report that error and is excluded from Nsight kernel conclusions.
+6. All published throughput comparisons remain from unprofiled, repeated/interleaved benchmark runs; profiled values are diagnostic only.
 
-## Next steps
+## Remaining close-out steps
 
-1. Capture a short Nsight Systems trace of `benchmark.py` without PyTorch Profiler and inspect the timeline around warmed-up measured steps.
-2. If phase-level attribution is needed, add/enable compatible NVTX ranges in the application and verify they appear in the trace before interpreting projections.
-3. Install and verify Nsight Compute (`ncu`) before collecting kernel-level metrics.
-4. Use Nsight Compute on a representative kernel after choosing it from a valid Nsight Systems/PyTorch Profiler trace.
-5. Keep profiling runs separate from unprofiled repeated throughput benchmarks.
+1. Run `compare_input_modes.py` on the L4 and record median step time and throughput for both modes.
+2. Capture a short `nsys profile` of the fused-AdamW device-input and host-input modes, then inspect only the post-warm-up measured region (after the initial ~1–1.2 seconds, if the trace timing supports that cutoff). Note whether kernels stay busy, where H2D/D2D copies occur, and whether there are multi-millisecond idle gaps at step boundaries.
+3. If the input comparison shows no meaningful step-time difference and the corresponding H2D operations disappear in device mode, conclude that input transfers are present but not the limiter. If host mode is slower and transfers sit on the step critical path, test prefetching once and remeasure.
+4. Do not start Nsight Compute unless the steady-state timeline identifies a specific unexplained hot kernel.
 
 ## Artifact handling
 
