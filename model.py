@@ -5,6 +5,7 @@ import torch
 from torch.profiler import record_function
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 
 class RMSNorm(nn.Module):
@@ -276,9 +277,14 @@ class TransformerLM(nn.Module):
         intermediate_size: int = 2048,
         max_seq_len: int = 1024,
         attention_backend: str = "eager",
+        checkpoint_policy: str = "none",
     ):
         super().__init__()
 
+        if checkpoint_policy not in {"none", "every_other", "every_block"}:
+            raise ValueError(f"Unsupported checkpoint policy: {checkpoint_policy}")
+
+        self.checkpoint_policy = checkpoint_policy
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.max_seq_len = max_seq_len
@@ -366,8 +372,22 @@ class TransformerLM(nn.Module):
             positions
         )
 
-        for block in self.blocks:
-            x = block(x)
+        for index, block in enumerate(self.blocks):
+            should_checkpoint = (
+                self.training
+                and torch.is_grad_enabled()
+                and (
+                    self.checkpoint_policy == "every_block"
+                    or (
+                        self.checkpoint_policy == "every_other"
+                        and index % 2 == 0
+                    )
+                )
+            )
+            if should_checkpoint:
+                x = checkpoint(block, x, use_reentrant=False)
+            else:
+                x = block(x)
 
         x = self.final_norm(x)
 
