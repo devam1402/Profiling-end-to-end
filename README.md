@@ -1,115 +1,133 @@
 # Transformer Performance Engineering Project
 
-
 **Measure. Profile. Optimize. Re-measure.**
 
-A hands-on performance-engineering project for understanding and optimizing Transformer training workloads on NVIDIA GPUs. This repository implements a configurable decoder-only Transformer and a repeatable workflow for benchmarking attention implementations, profiling CUDA execution, measuring GPU memory, and evaluating optimizer implementations.
+A controlled, hands-on performance-engineering lab using a configurable decoder-only Transformer to investigate end-to-end training throughput, GPU memory use, attention kernels, optimizer implementations, input placement, and activation checkpointing on NVIDIA GPUs.
 
-The goal is not just to make a Transformer run faster. It is to identify bottlenecks, change one variable at a time, measure the impact, and preserve the evidence.
+The goal is not to train a better model. It is to identify bottlenecks, change one variable at a time, measure the impact, and preserve the evidence.
 
-## Project Highlights
+## Results at a glance
 
-- **Real GPU benchmarking:** Experiments performed on an NVIDIA L4 with 23 GB of GPU memory.
-- **Attention optimization:** Compared eager attention with PyTorch scaled dot-product attention (SDPA) and forced Flash Attention.
-- **Mixed precision:** Added BF16 autocast while retaining FP32 model parameters.
-- **Long-context experiments:** Compared attention implementations at sequence lengths of 128 and 2,048.
-- **CUDA profiling:** Used PyTorch Profiler and CUDA events to investigate attention, matrix multiplication, memory-copy operations, and optimizer execution.
-- **Optimizer benchmarking:** Added an optional fused AdamW implementation and evaluated it against standard AdamW.
-- **Reproducible results:** Saved per-run JSON metrics and validation logs.
+**Primary workload:** NVIDIA L4 (23,034 MiB), sequence length 2,048, BF16 autocast, unless noted. The attention and optimizer results below use unprofiled benchmark runs. The activation-checkpointing sweep is a shorter preliminary experiment and is labelled separately.
 
-## Results at a Glance
+| Experiment | Configuration | Median throughput | Peak allocated memory | Result |
+|---|---|---:|---:|---|
+| Eager attention | BF16, sequence 2,048 | 12,376.5 tokens/s | 6,873.6 MiB | Baseline |
+| Forced Flash Attention | BF16, sequence 2,048 | 42,293.9 tokens/s | 3,398.5 MiB | 3.42× throughput; 50.6% less allocated memory |
+| Fused AdamW | BF16 + Flash, sequence 2,048 | 49,675 tokens/s | 3,398.5 MiB | 7.9% higher throughput than standard AdamW in a separate controlled comparison |
+| Host vs device inputs | BF16 + Flash + fused AdamW | 49,177 vs 49,270 tokens/s | 3,399 MiB | No material throughput difference in this test |
+| Full checkpointing | Batch 2, BF16 + Flash + fused AdamW | 43,111.7 tokens/s | 2,458.0 MiB | 27.7% less memory, 13.1% lower throughput |
 
-<sub>Hardware: NVIDIA L4 · 5 warm-up steps · 30 measured steps per benchmark run · four runs per configuration.</sub>
+**Headline:** On this L4 workload, forced Flash Attention at sequence length 2,048 delivered 3.42× the eager-attention throughput and reduced peak allocated memory by 50.6%. Fused AdamW improved throughput in its separate controlled comparison. Activation checkpointing saved memory but did not improve throughput.
 
-### 1. FP32 attention comparison — sequence length 128
+These results are observations for this model, GPU, software environment, and run protocol—not universal speedup guarantees.
 
-| Metric | Eager attention | SDPA |
+## Project highlights
+
+- Benchmark eager attention, PyTorch scaled dot-product attention (SDPA), and forced Flash Attention.
+- Use BF16 autocast while retaining FP32 model parameters.
+- Compare short-sequence and 2,048-token workloads.
+- Compare standard and fused AdamW.
+- Compare host-generated and device-generated synthetic inputs.
+- Test activation checkpointing and validate loss/gradient agreement.
+- Use PyTorch Profiler and Nsight Systems for diagnosis; do not use instrumented runs as throughput evidence.
+- Preserve per-run JSON metrics, configuration details, and validation results.
+
+## Detailed results
+
+### 1. FP32 attention — short sequence
+
+| Metric | Eager | SDPA |
 |---|---:|---:|
 | Median step time | 44.15 ms | 39.70 ms |
 | Median throughput | 5,755.7 tokens/s | 6,379.6 tokens/s |
 
-SDPA delivered approximately **10.8% higher median throughput** in this repeated comparison.
+SDPA delivered 10.8% higher median throughput in four interleaved pairs.
 
-### 2. BF16 attention comparison — sequence length 128
+### 2. BF16 attention — short sequence
 
-| Metric | Eager attention | Flash Attention |
+| Metric | Eager | Forced Flash Attention |
 |---|---:|---:|
 | Median step time | 45.35 ms | 40.20 ms |
 | Median throughput | 5,586.0 tokens/s | 6,299.8 tokens/s |
-| Peak allocated GPU memory | ~1,338 MiB | ~1,337 MiB |
+| Peak allocated memory | ~1,338 MiB | ~1,337 MiB |
 
-Flash Attention delivered approximately **12.8% higher median throughput** in this experiment.
+Forced Flash Attention delivered 12.8% higher median throughput. Flash kernels were confirmed in profiler traces.
 
-### 3. BF16 attention comparison — sequence length 2,048
+### 3. BF16 attention — sequence length 2,048
 
-| Metric | Eager attention | Flash Attention |
+| Metric | Eager | Forced Flash Attention |
 |---|---:|---:|
 | Median step time | 330.8 ms | 96.7 ms |
 | Median throughput | 12,376.5 tokens/s | 42,293.9 tokens/s |
-| Peak allocated GPU memory | 6,873.6 MiB | 3,398.5 MiB |
-| Peak reserved GPU memory | 7,504 MiB | 3,904 MiB |
+| Peak allocated memory | 6,873.6 MiB | 3,398.5 MiB |
+| Peak reserved memory | 7,504 MiB | 3,904 MiB |
 
-At sequence length 2,048, Flash Attention achieved approximately:
+Forced Flash Attention achieved:
+- **3.42×** the median throughput.
+- **70.8%** lower median step time.
+- **50.6%** lower peak allocated memory.
 
-- **3.42× the throughput** of eager attention.
-- **70.8% lower median step time.**
-- **50.6% lower peak allocated GPU memory.**
+In an instrumented profile, summed attention CUDA-event time fell from 284 ms to 17 ms (about 94%); attention's share of forward-pass event time fell from 45.7% to 4.5%. These summed event totals are not individual step latencies.
 
-This experiment demonstrates why attention implementation and memory efficiency become increasingly important as sequence length grows.
+### 4. Standard vs fused AdamW — sequence length 2,048
 
-### 4. Standard vs. fused AdamW — sequence length 2,048
-
-This separate controlled experiment used BF16, forced Flash Attention, five warm-up steps, and 30 measured steps per run.
+BF16 + forced Flash Attention, four alternating pairs.
 
 | Metric | Standard AdamW | Fused AdamW |
 |---|---:|---:|
 | Median step time | 88.45 ms | 82.15 ms |
 | Median throughput | 46,056 tokens/s | 49,675 tokens/s |
-| Peak allocated GPU memory | 3,398.5 MiB | 3,398.5 MiB |
-| Peak reserved GPU memory | 3,904 MiB | 3,904 MiB |
+| Peak allocated memory | 3,398.5 MiB | 3,398.5 MiB |
 
-Fused AdamW delivered approximately **7.9% higher median throughput** across four alternating pairs, without a meaningful change in peak GPU memory usage.
+Fused AdamW delivered 7.9% higher median throughput without a meaningful change in peak allocated memory. This is a separate experiment from the attention comparison; compare results only within matching configurations.
 
-The optimizer comparison is a separate experiment from the initial attention comparison. Its throughput figures should not be compared directly across those experiments as if they shared an identical optimizer configuration.
+### 5. Input placement — sequence length 2,048
 
-### How to interpret these results
+BF16 + forced Flash Attention + fused AdamW, four interleaved pairs.
 
-These measurements apply to this model, GPU, configuration, and software environment. They are not universal speedup guarantees. Results may differ with model architecture, batch size, sequence length, GPU type, PyTorch version, and optimizer implementation.
+| Input mode | Median step time | Median throughput |
+|---|---:|---:|
+| Device-generated synthetic inputs | 82.9 ms | 49,270 tokens/s |
+| Host inputs + non-blocking copy | 83.3 ms | 49,177 tokens/s |
 
----
+The host-input run had about 0.5% higher step time. Input placement did not materially change throughput in this workload.
 
-## What This Project Measures
+### 6. Activation checkpointing — sequence length 2,048
 
-The benchmark captures the end-to-end training-step cost, including:
+BF16 + forced Flash Attention + fused AdamW. This preliminary sweep used **2 warm-up steps and 5 measured steps per configuration**, rather than the longer protocol used in the attention and optimizer experiments. Correctness was checked separately.
 
+| Checkpoint policy | Batch | Median step time | Throughput | Peak allocated memory |
+|---|---:|---:|---:|---:|
+| None | 2 | 82.3 ms | 49,631.7 tokens/s | 3,398.5 MiB |
+| Every other block | 2 | 88.3 ms | 46,199.4 tokens/s | 2,930.6 MiB |
+| Every block | 2 | 94.9 ms | 43,111.7 tokens/s | 2,458.0 MiB |
+| Every block | 3 | 139.3 ms | 44,020.3 tokens/s | 3,257.1 MiB |
+| Every block | 4 | 188.6 ms | 43,281.6 tokens/s | 4,056.1 MiB |
+
+The correctness check matched baseline and full-checkpointing losses at 10.53256321, with maximum absolute gradient difference of 7.78e-05 across 45 checked gradients.
+
+**Finding:** At batch size 2, partial checkpointing reduced allocated memory by 13.8% with 6.9% lower throughput; full checkpointing reduced memory by 27.7% with 13.1% lower throughput. Increasing full-checkpointing batch size to 3 brought memory close to baseline but throughput remained 11.3% lower. Batch size 4 exceeded baseline allocated memory and did not recover baseline throughput.
+
+This is a negative throughput result for this workload, but a useful demonstration of the memory-versus-recomputation trade-off. See [the Phase 5 report](results/phase5/activation-checkpointing.md) and the raw JSON records in `results/raw/`.
+
+## What the benchmark measures
+
+A training step includes:
 1. Synthetic input generation.
 2. Forward pass and loss computation.
 3. Backward pass.
 4. Optimizer update.
 
-Warm-up steps are excluded from the measured interval. CUDA synchronization is used around timed steps so asynchronous GPU execution does not invalidate wall-clock timing.
+Warm-up steps are excluded from timing. CUDA synchronization is used around the timed region. JSON results record hardware/software details, Git commit, configuration, seed, backend, precision, optimizer, timings, throughput, loss, and peak allocated/reserved GPU memory.
 
-Each benchmark JSON records information such as:
+Throughput is a training-workload metric calculated from batch size, sequence length, and elapsed measured time. It is **not** autoregressive inference tokens per second. Synthetic inputs are used; the project makes no dataset-quality or convergence claims.
 
-- GPU and software versions.
-- Git commit identifier.
-- Configuration and random seed.
-- Attention backend and precision.
-- Optimizer implementation.
-- Number of warm-up and measured steps.
-- Per-step timings and aggregate throughput.
-- Loss values.
-- Peak allocated and reserved GPU memory.
+## Architecture and configuration
 
-The benchmark uses synthetic token inputs. The purpose is to measure execution behavior, not to train a production model or demonstrate model quality.
+The model is a configurable pre-normalized decoder-only Transformer with RMSNorm, SwiGLU feed-forward layers, tied embeddings, and causal self-attention.
 
-## Architecture and Experiment Design
-
-The project uses a configurable decoder-only Transformer. The model has a pre-normalized Transformer structure with RMSNorm, SwiGLU feed-forward layers, tied embeddings, and causal self-attention.
-
-The baseline experiment uses a small configuration to keep iteration practical while exposing meaningful compute and memory behavior.
-
-| Parameter | Baseline setting |
+| Parameter | Baseline |
 |---|---|
 | Transformer layers | 6 |
 | Hidden size | 768 |
@@ -117,84 +135,39 @@ The baseline experiment uses a small configuration to keep iteration practical w
 | Intermediate size | 2,048 |
 | Vocabulary size | 32,000 |
 | Batch size | 2 |
-| Sequence length | 128 |
-| Maximum sequence length | 1,024 |
-| Attention backend | Eager |
-| Compute precision | FP32 |
+| Sequence length | 128 (baseline); 2,048 (validation) |
+| Attention backend | Eager (baseline) |
+| Precision | FP32 baseline; BF16 autocast in validation |
 | Random seed | 42 |
 
-The baseline configuration is maintained separately from validation configurations. Longer-context experiments use `configs/validation_seq2048.yaml`, leaving `configs/baseline.yaml` unchanged.
+Long-context runs use `configs/validation_seq2048.yaml`; the baseline config is kept separate.
 
 ### Attention backends
 
-**Eager attention**
+- **Eager:** explicit attention operations.
+- **SDPA:** `torch.nn.functional.scaled_dot_product_attention`, allowing PyTorch to select a supported backend.
+- **Forced Flash Attention:** requires `SDPBackend.FLASH_ATTENTION`; the run fails if the requested backend is unavailable instead of silently falling back.
 
-Uses the model's explicit attention operations. This provides a useful comparison point for investigating intermediate tensors, memory traffic, and kernel-launch overhead.
+### Precision and optimizers
 
-**PyTorch SDPA**
+BF16 is applied through autocast during the forward pass; model parameters remain FP32. The benchmark supports standard AdamW (`fused=False`) and fused AdamW (`fused=True`).
 
-Uses `torch.nn.functional.scaled_dot_product_attention`, allowing PyTorch to select a supported attention implementation.
+## Profiling findings
 
-**Forced Flash Attention**
+PyTorch Profiler and Nsight Systems were used as separate diagnostic tools.
 
-Uses PyTorch's SDPA backend selection to require `SDPBackend.FLASH_ATTENTION`. The benchmark fails rather than silently substituting another SDPA backend if the requested implementation cannot run.
+- The instrumented attention-event share of forward time fell from 45.7% (eager) to 4.5% (Flash).
+- The profiler highlighted matrix multiplication (`aten::mm`), tensor copies (`aten::copy_`), optimizer work, kernel launches, and synchronization.
+- Nsight Systems confirmed Flash forward and backward kernels in steady state. Library loading and long synchronizations were identified as startup effects.
+- Host-to-device copies appeared in short captures but were not dominant in the unprofiled host-versus-device benchmark.
+- PyTorch Profiler and Nsight Systems were not run together because of a CUPTI multi-subscriber conflict.
+- Nsight Compute was unavailable because GPU performance counters were restricted (`ERR_NVGPUCTRPERM`).
 
-### Precision
+Profiler timings include instrumentation overhead and overlapping scopes. Do not add event totals together or substitute them for unprofiled step times.
 
-BF16 is enabled through autocast around the forward pass. Model parameters remain FP32, and the optimizer is not converted to a BF16-parameter optimizer.
-
-BF16 results are therefore comparisons of the tested autocast execution paths, not full-model BF16 parameter storage.
-
-### Optimizers
-
-The benchmark supports:
-
-- `adamw`: standard AdamW execution with `fused=False`.
-- `fused_adamw`: AdamW with `fused=True`.
-
-The standard-versus-fused comparison uses the same model configuration, precision, attention backend, warm-up count, and measured step count.
-
----
-
-## Profiling Findings
-
-PyTorch Profiler and CUDA events were used to inspect two-step training runs at sequence length 2,048.
-
-### Attention-compute timing
-
-| Profile measurement | Eager BF16 | Flash BF16 |
-|---|---:|---:|
-| Attention CUDA-event time | 284.156 ms | 17.139 ms |
-| Forward-pass CUDA-event time | 622.145 ms | 384.592 ms |
-| Attention / forward-pass time | 45.7% | 4.5% |
-
-The instrumented attention-compute region became approximately 94% faster with Flash Attention.
-
-These event totals are summed across layers and profiled steps. They are not individual step latencies and should not be compared directly with ordinary benchmark timings.
-
-The instrumented attention region excludes QKV projections, output projection, and backward computation.
-
-### Other observed costs
-
-The profiler also highlighted:
-
-- Matrix multiplication operations (`aten::mm`).
-- Tensor-copy operations (`aten::copy_`).
-- AdamW optimizer execution.
-- CUDA kernel launches and synchronization.
-
-These findings helped guide the next experiment: evaluating fused AdamW after reducing the attention-compute cost.
-
-Profiler output includes instrumentation overhead and overlapping timing scopes. Operator-table timings should not simply be added together.
-
----
-
-## Repository Layout
-
-The main files and experiment outputs are organized around benchmarking, profiling, configuration, and evidence.
+## Repository layout
 
 ```text
-perf-transformer/
 ├── model.py
 ├── train.py
 ├── benchmark.py
@@ -204,69 +177,54 @@ perf-transformer/
 │   ├── baseline.yaml
 │   └── validation_seq2048.yaml
 ├── tests/
-├── results/
-│   ├── raw/
-│   │   └── benchmark_*.json
-│   ├── validation/
-│   │   └── *.log
-│   └── traces/
-│       └── profiler traces and metadata
-└── README.md
+└── results/
+    ├── raw/          # benchmark_*.json
+    ├── validation/
+    ├── phase5/
+    │   └── activation-checkpointing.md
+    └── traces/       # local traces; not committed
 ```
 
-The layout above highlights the core workflow; additional project directories may contain metrics, observability, experiment helpers, and supporting utilities.
-
-Profiler traces and generated trace archives should remain out of Git unless there is a specific reason to publish them.
+Large profiler traces and archives are kept out of Git.
 
 ## Environment
 
-The recorded experiment environment was:
-
-| Component | Version or configuration |
+| Component | Recorded environment |
 |---|---|
 | GPU | NVIDIA L4 |
-| GPU memory | 23,034 MiB reported by NVIDIA-SMI |
+| GPU memory | 23,034 MiB |
 | NVIDIA driver | 580.126.20 |
 | CUDA version reported by NVIDIA-SMI | 13.0 |
 | PyTorch | 2.14.1+cu130 |
 | Python | 3.12.3 |
-| Operating system | Ubuntu-based Linux environment |
+| Operating system | Ubuntu-based container |
 
-The commands below assume a CUDA-enabled environment with compatible NVIDIA drivers and a working PyTorch CUDA installation.
-
-## Reproducing the Experiments
+## Reproducing the experiments
 
 ### 1. Set up the environment
-
-Clone the repository and create an isolated Python environment:
 
 ```bash
 git clone https://github.com/devam1402/Profiling-end-to-end.git
 cd Profiling-end-to-end
-
 python3 -m venv .venv
 source .venv/bin/activate
-
 python -m pip install --upgrade pip
+# Install project dependencies and a PyTorch CUDA build compatible with your environment.
 ```
 
-Install the project's dependencies using its dependency files, if present. Use a PyTorch build compatible with your GPU and CUDA environment.
-
-Verify the environment:
+Verify CUDA visibility:
 
 ```bash
 python - <<'PY'
 import torch
-
 print("PyTorch:", torch.__version__)
 print("CUDA available:", torch.cuda.is_available())
-
 if torch.cuda.is_available():
     print("GPU:", torch.cuda.get_device_name(0))
 PY
 ```
 
-### 2. Run the baseline benchmark
+### 2. Baseline: eager attention, FP32
 
 ```bash
 python benchmark.py \
@@ -278,21 +236,7 @@ python benchmark.py \
   --steps 30
 ```
 
-### 3. Compare eager attention and SDPA
-
-```bash
-python benchmark.py \
-  --config configs/baseline.yaml \
-  --device cuda \
-  --attention-backend sdpa \
-  --precision fp32 \
-  --warmup 5 \
-  --steps 30
-```
-
-For a valid comparison, alternate the configurations and repeat the runs instead of relying on a single measurement.
-
-### 4. Run BF16 Flash Attention
+### 3. SDPA with forced Flash Attention
 
 ```bash
 python benchmark.py \
@@ -305,44 +249,7 @@ python benchmark.py \
   --steps 30
 ```
 
-### 5. Run the sequence-2048 experiment
-
-```bash
-python benchmark.py \
-  --config configs/validation_seq2048.yaml \
-  --device cuda \
-  --attention-backend sdpa \
-  --precision bf16 \
-  --sdpa-backend flash \
-  --warmup 5 \
-  --steps 30
-```
-
-To compare eager attention at the same sequence length, change the attention options to:
-
-```bash
---attention-backend eager
-```
-
-Remove `--sdpa-backend flash` for the eager run.
-
-### 6. Compare standard and fused AdamW
-
-Standard AdamW:
-
-```bash
-python benchmark.py \
-  --config configs/validation_seq2048.yaml \
-  --device cuda \
-  --attention-backend sdpa \
-  --precision bf16 \
-  --sdpa-backend flash \
-  --optimizer adamw \
-  --warmup 5 \
-  --steps 30
-```
-
-Fused AdamW:
+### 4. Sequence length 2,048 with fused AdamW
 
 ```bash
 python benchmark.py \
@@ -356,22 +263,9 @@ python benchmark.py \
   --steps 30
 ```
 
-Fused optimizer support depends on the PyTorch build and device. If the fused implementation is unsupported, the benchmark may fail.
+For eager attention at the same sequence length, use `--attention-backend eager` and remove `--sdpa-backend flash`.
 
-### 7. Profile a training run
-
-Eager attention:
-
-```bash
-python profile_step.py \
-  --config configs/validation_seq2048.yaml \
-  --device cuda \
-  --attention-backend eager \
-  --precision bf16 \
-  --steps 2
-```
-
-Forced Flash Attention:
+### 5. Profile a training run (diagnostic only)
 
 ```bash
 python profile_step.py \
@@ -383,73 +277,43 @@ python profile_step.py \
   --steps 2
 ```
 
-Profiler traces and metadata are written under `results/traces/`. They can be inspected with [Perfetto](https://ui.perfetto.dev/).
+**Do not use profiler-enabled runs for throughput comparisons.** Alternate configurations and repeat unprofiled runs; do not treat a single measurement as conclusive.
 
-**Important:** Do not use profiler-enabled runs for throughput comparisons. Profiling changes execution behavior and adds overhead.
+## Methodology
 
----
-
-## Experimental Methodology
-
-The project follows a controlled performance-engineering loop:
-
-1. Establish a baseline.
-2. Change one implementation choice.
-3. Warm up the workload.
-4. Measure repeated training steps.
-5. Record latency, throughput, memory, and loss.
-6. Profile when the benchmark reveals a potential bottleneck.
-7. Repeat measurements and compare run-level statistics.
-8. Preserve the configuration and raw evidence.
-
-For throughput, the benchmark counts input tokens processed per training step using the configured batch size and sequence length. Throughput is a training-workload metric, not autoregressive inference tokens per second.
-
-For fair comparisons:
-
-- Use the same model and input configuration.
-- Keep batch size, sequence length, precision, and warm-up settings constant.
-- Change only the variable under investigation.
-- Alternate benchmark configurations to reduce ordering effects.
-- Repeat runs and report medians alongside individual measurements.
-- Record the exact software and hardware environment.
-- Keep the baseline configuration unchanged.
+1. Fix the workload: model, batch, sequence length, precision, and seed.
+2. Change one variable at a time.
+3. Warm up, then measure with CUDA synchronization.
+4. Repeat runs and report medians.
+5. Profile only to explain a benchmark result.
+6. Preserve raw JSON and the associated Git commit.
 
 ## Limitations
 
-This is a performance-engineering lab, not a production training framework.
+- Synthetic inputs only; no model-quality or convergence claims.
+- Results cover one GPU type and one compact Transformer configuration.
+- No multi-GPU scaling results are reported yet.
+- Profiler timings include overhead and overlapping scopes.
+- BF16 autocast can produce small numerical differences versus FP32.
+- Activation-checkpointing results use a shorter five-step measurement window.
+- All performance numbers are workload-specific observations, not universal guarantees.
 
-- Inputs are synthetic token sequences; no dataset-quality or convergence claims are made.
-- Results represent one GPU type and one compact Transformer configuration.
-- The experiments do not establish scaling behavior across multiple GPUs.
-- Profiler timings include overhead and should be interpreted separately from unprofiled throughput.
-- BF16 may introduce numerical differences relative to FP32.
-- Short-run loss comparisons do not establish equivalent model quality or convergence.
-- Performance improvements may vary across PyTorch versions, GPU architectures, model dimensions, and workload shapes.
-- The reported numbers are experimental observations, not universal guarantees.
+## Future work
 
-## Future Work
+- Repeat the activation-checkpointing sweep with longer measurement windows.
+- Investigate multi-GPU DDP, NCCL communication, and overlap using Nsight Systems.
+- Explore `torch.compile` and Nsight Compute if GPU performance counters are available.
 
-Potential follow-up experiments include:
-
-- Automated result aggregation and comparison reports.
-- Longer-context and batch-size sweeps.
-- Profiling optimizer and tensor-copy overhead in more detail.
-- Activation checkpointing and memory/compute trade-offs.
-- Comparing throughput and memory under additional precision modes.
-- Multi-GPU distributed training experiments.
-- Profiling with NVIDIA Nsight Systems and Nsight Compute.
-- Automated regression detection across benchmark runs.
-
-Each extension should follow the same principle: measure the baseline, isolate the change, repeat the experiment, and retain the evidence.
+Each extension follows the same rule: one variable, unprofiled medians, and preserved evidence.
 
 ## Author
 
 **Devam Thacker**
 
-Master of Financial Technology candidate with interests in AI infrastructure, GPU performance engineering, cloud-native platforms, and ML systems.
+Master of Financial Technology candidate interested in AI infrastructure, GPU performance engineering, and ML systems.
 
 GitHub: [@devam1402](https://github.com/devam1402)
 
 ---
 
-*Built as a practical study of Transformer performance engineering: from end-to-end measurement to CUDA profiling and evidence-driven optimization.*
+*Controlled Transformer training workload. Measured kernel, memory, and data-movement effects on an NVIDIA L4. Evidence over claims.*
