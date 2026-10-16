@@ -15,7 +15,8 @@ The goal is not just to make a Transformer run faster. It is to identify bottlen
 - **Long-context experiments:** Compared attention implementations at sequence lengths of 128 and 2,048.
 - **CUDA profiling:** Used PyTorch Profiler and CUDA events to investigate attention, matrix multiplication, memory-copy operations, and optimizer execution.
 - **Optimizer benchmarking:** Added an optional fused AdamW implementation and evaluated it against standard AdamW.
-- **Reproducible results:** Saved per-run JSON metrics and validation logs.
+- **Activation checkpointing:** Compared no checkpointing, every-other-block checkpointing, and full checkpointing on an NVIDIA L4; validated loss/gradient equivalence.
+- **Reproducible results:** Saved per-run JSON metrics, validation logs, and a Phase 5 report.
 
 ## Results at a Glance
 
@@ -71,6 +72,24 @@ This separate controlled experiment used BF16, forced Flash Attention, five warm
 Fused AdamW delivered approximately **7.9% higher median throughput** across four alternating pairs, without a meaningful change in peak GPU memory usage.
 
 The optimizer comparison is a separate experiment from the initial attention comparison. Its throughput figures should not be compared directly across those experiments as if they shared an identical optimizer configuration.
+
+### 5. Activation checkpointing — sequence length 2,048
+
+This preliminary sweep used BF16 autocast, forced Flash Attention, fused AdamW, device-side synthetic inputs, two warm-up steps, and five measured steps per configuration.
+
+| Checkpoint policy | Batch size | Median step time | Throughput | Peak allocated memory |
+|---|---:|---:|---:|---:|
+| None | 2 | 82.3 ms | 49,631.7 tokens/s | 3,398.5 MiB |
+| Every other block | 2 | 88.3 ms | 46,199.4 tokens/s | 2,930.6 MiB |
+| Every block | 2 | 94.9 ms | 43,111.7 tokens/s | 2,458.0 MiB |
+| Every block | 3 | 139.3 ms | 44,020.3 tokens/s | 3,257.1 MiB |
+| Every block | 4 | 188.6 ms | 43,281.6 tokens/s | 4,056.1 MiB |
+
+At batch size 2, full checkpointing reduced peak allocated memory by approximately **27.7%**, while throughput was approximately **13.1% lower** than the no-checkpoint baseline. At batch size 3, peak allocated memory was approximately **4.2% lower** than baseline, but throughput was approximately **11.3% lower**.
+
+The correctness check passed: baseline and full-checkpointing losses matched at 10.53256321, with maximum absolute gradient difference of 7.7809207e-05 across 45 checked gradients.
+
+These are preliminary results from five measured steps per configuration. The sweep indicates a memory-versus-recomputation trade-off for this workload, not a throughput improvement. See [the Phase 5 report](results/phase5/activation-checkpointing.md) and the raw JSON records in `results/raw/`.
 
 ### How to interpret these results
 
@@ -434,7 +453,7 @@ Potential follow-up experiments include:
 - Automated result aggregation and comparison reports.
 - Longer-context and batch-size sweeps.
 - Profiling optimizer and tensor-copy overhead in more detail.
-- Activation checkpointing and memory/compute trade-offs.
+- Further activation-checkpointing sweeps with longer measurement windows and repeated runs.
 - Comparing throughput and memory under additional precision modes.
 - Multi-GPU distributed training experiments.
 - Profiling with NVIDIA Nsight Systems and Nsight Compute.
