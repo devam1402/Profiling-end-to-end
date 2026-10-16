@@ -38,6 +38,12 @@ def main():
     parser.add_argument("--config", default="configs/baseline.yaml")
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--steps", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=None,
+                        help="Override configured batch size")
+    parser.add_argument("--checkpoint-policy",
+                        choices=["none", "every_other", "every_block"],
+                        default="none",
+                        help="Activation checkpointing policy")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument(
         "--attention-backend",
@@ -93,7 +99,9 @@ def main():
 
     model_cfg = config["model"]
     train_cfg = config["training"]
-    batch_size = train_cfg["batch_size"]
+    batch_size = args.batch_size if args.batch_size is not None else train_cfg["batch_size"]
+    if batch_size < 1:
+        parser.error("--batch-size must be >= 1")
     seq_len = train_cfg["sequence_length"]
 
     if seq_len < 2 or seq_len > model_cfg["max_seq_len"]:
@@ -112,6 +120,7 @@ def main():
     model = TransformerLM(
         **model_cfg,
         attention_backend=attention_backend,
+        checkpoint_policy=args.checkpoint_policy,
     ).to(device)
     if args.sdpa_backend == "flash" and attention_backend != "sdpa":
         parser.error("--sdpa-backend flash requires --attention-backend sdpa")
@@ -215,6 +224,7 @@ def main():
             "FLASH_ATTENTION" if args.sdpa_backend == "flash" else "default"
         ),
         "optimizer": args.optimizer,
+        "checkpoint_policy": args.checkpoint_policy,
         "input_mode": args.input_mode,
         "parameters": sum(p.numel() for p in model.parameters()),
         "warmup_steps": args.warmup,
@@ -270,6 +280,8 @@ def main():
     print(f"Precision: {result['precision']}")
     print(f"SDPA backend: {result['sdpa_backend']}")
     print(f"Optimizer: {result['optimizer']}")
+    print(f"Checkpoint policy: {result['checkpoint_policy']}")
+    print(f"Batch size: {result['batch_size']}")
     print(f"Warm-up steps: {args.warmup}")
     print(f"Measured steps: {args.steps}")
     print(f"Average step: {result['average_step_seconds']:.3f} s")
