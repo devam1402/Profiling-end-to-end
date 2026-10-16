@@ -63,6 +63,15 @@ def main():
         default="adamw",
         help="Optimizer implementation for controlled comparisons",
     )
+    parser.add_argument(
+        "--input-mode",
+        choices=["device", "host"],
+        default="device",
+        help=(
+            "Generate synthetic token batches on the selected device, or on "
+            "the CPU and transfer them to the device"
+        ),
+    )
     args = parser.parse_args()
 
     if args.warmup < 0 or args.steps < 1:
@@ -117,12 +126,24 @@ def main():
     )
 
     def train_step():
-        input_ids = torch.randint(
-            0,
-            model_cfg["vocab_size"],
-            (batch_size, seq_len),
-            device=device,
-        )
+        if args.input_mode == "device":
+            input_ids = torch.randint(
+                0,
+                model_cfg["vocab_size"],
+                (batch_size, seq_len),
+                device=device,
+            )
+        else:
+            # Deliberately include host-side generation and H2D transfer in
+            # the timed step so the input-mode comparison measures end-to-end
+            # training-step cost. non_blocking=True is an optimization hint;
+            # transfer overlap is not assumed.
+            input_ids = torch.randint(
+                0,
+                model_cfg["vocab_size"],
+                (batch_size, seq_len),
+                device="cpu",
+            ).to(device, non_blocking=True)
         inputs, labels = input_ids[:, :-1], input_ids[:, 1:]
 
         optimizer.zero_grad(set_to_none=True)
@@ -194,6 +215,7 @@ def main():
             "FLASH_ATTENTION" if args.sdpa_backend == "flash" else "default"
         ),
         "optimizer": args.optimizer,
+        "input_mode": args.input_mode,
         "parameters": sum(p.numel() for p in model.parameters()),
         "warmup_steps": args.warmup,
         "measured_steps": args.steps,
@@ -229,7 +251,8 @@ def main():
         ),
         "config": config,
         "note": (
-            "Training-step timing includes random input generation, "
+            "Training-step timing includes input generation (on the selected "
+            "device or on CPU followed by .to(device, non_blocking=True)), "
             "forward pass, backward pass, and optimizer update. "
             "Warm-up steps excluded. Profiler disabled."
         ),
